@@ -1,54 +1,61 @@
-What Is Application Log (BAL) in SAP?
-The SAP Application Log is a cross-application framework for storing, retrieving, and displaying messages generated during program execution. Think of it as a structured message journal your application writes to at runtime.
+"What Is Application Log (BAL) in SAP?
+"The SAP Application Log is a cross-application framework for storing, retrieving, and displaying messages generated during program execution. Think of it as a structured message journal your application writes to at runtime.
 
-Each log entry is organized around three key identifiers:
+"Each log entry is organized around three key identifiers:
 
-Object: A high-level grouping representing a functional area or application.
-Subobject: A finer grouping within an object.
-External ID: A free-form string you provide at runtime to tie a log to a specific business document key.
-Log entries are persisted in database tables like BALHDR (log header) and BALDAT (log data). You can view all logs using transaction SLG1, filtering by object, subobject, external ID, date, or user. SLG1 gives you a structured view of messages with severity indicators (Status, Warning, Error, Abort), timestamps, and user info.
+"Object: A high-level grouping representing a functional area or application.
+"Subobject: A finer grouping within an object.
+"External ID: A free-form string you provide at runtime to tie a log to a specific business document key.
+"Log entries are persisted in database tables like BALHDR (log header) and BALDAT (log data). You can view all logs using transaction SLG1, filtering by object, subobject, external ID, date, or user. SLG1 gives you a structured view of messages with severity indicators (Status, Warning, Error, Abort), timestamps, and user info.
 
-Application logs are used extensively across SAP for background job results, IDoc/BAPI interface processing, data migration runs, and custom business process event tracking.
+"Application logs are used extensively across SAP for background job results, IDoc/BAPI interface processing, data migration runs, and 
+"custom business process event tracking.
 
-In ABAP Cloud, SAP provides a clean object-oriented API for application logging through the CL_BALI_* and XCO_CP_BAL class families, which is what we use here.
-The Goal
-We have a Billing Document RAP app with a header and item entity. Every time a billing item is created or a field is changed (material, quantity, amount, UOM, currency), we want to write an application log entry and surface those entries as a Change Log tab on the item object page in Fiori Elements.
+"In ABAP Cloud, SAP provides a clean object-oriented API for application logging through the CL_BALI_* and XCO_CP_BAL class families, which is what we use here.
+"The Goal
+"We have a Billing Document RAP app with a header and item entity. Every time a billing item is created or a field is changed (material, quantity, amount, UOM, currency), we want to write an application log entry and surface those entries as a Change Log tab on the item object page in Fiori Elements.
 
-This solution is verified to work on S/4HANA 2023.
+"This solution is verified to work on S/4HANA 2023.
 
-Steps to Implement Application Log
-Step 1: Create the Application Log Object via ADT
-This is a prerequisite before writing any code. In classic ABAP you would use transaction SLG0 for this. In ABAP Cloud / BTP development, you create the log object directly from ADT.
+"Steps to Implement Application Log
+"Step 1: Create the Application Log Object via ADT
+"This is a prerequisite before writing any code. In classic ABAP you would use transaction SLG0 for this. In ABAP Cloud / BTP development, you create the log object directly from ADT.
 
-In Eclipse ADT: File > New > Other > ABAP > Application Log Object
+"In Eclipse ADT: File > New > Other > ABAP > Application Log Object
 
-Create the following:
+"Create the following:
 
-Object: ZBILL_ITEM - "Billing Item Log"
-Subobject: ZCHANGES under ZBILL_ITEM - "Item Field Changes"
+"Object: ZBILL_ITEM - "Billing Item Log"
+"Subobject: ZCHANGES under ZBILL_ITEM - "Item Field Changes"
 
-Activate both before moving on. Without this step, the CL_BALI_* write calls will throw a CX_BALI_RUNTIME exception at runtime.
+"Activate both before moving on. Without this step, the CL_BALI_* write calls will throw a CX_BALI_RUNTIME exception at runtime.
 
 
-Step 2: Add with additional save to the Behavior Definition
-Our app is a managed RAP BO. In a pure managed scenario, the framework handles all database persistence automatically and there is no saver class.
+"Step 2: Add with additional save to the Behavior Definition
+"Our app is a managed RAP BO. In a pure managed scenario, the framework handles all database persistence automatically and there is no saver class.
 
-To write application logs during the save sequence, we need a hook into that process, and that is exactly what with additional save provides.
+"To write application logs during the save sequence, we need a hook into that process, and that is exactly what with additional save provides.
 
-Adding this keyword to the header behavior node tells the RAP framework to generate a local saver class LSC_ZSAC_I_BILL_HEADER and call its save_modified method after the managed save completes. This method is where we will write our BALI log entries in Step 9.
+"Adding this keyword to the header behavior node tells the RAP framework to generate a 
+"local saver class LSC_ZSAC_I_BILL_HEADER and call its save_modified method after the managed save completes.
+"This method is where we will write our BALI log entries in Step 9.
 
-Add with additional save at the beginning of the BDEF as shown below:
+"Add with additional save at the beginning of the BDEF as shown below:
 
 managed with additional save implementation in class ZBP_SAC_I_BILL_HEADER unique;
 strict ( 2 );
 with draft;
 
-Once you activate the BDEF and adjust the implementation class through quick fix, ADT will create the local saver class LSC_ZSAC_I_BILL_HEADER inside the behavior implementation class ZBP_SAC_I_BILL_HEADER. We will implement its save_modified method in Step 9.
+"Once you activate the BDEF and adjust the implementation class through quick fix,
+"ADT will create the local saver class LSC_ZSAC_I_BILL_HEADER inside the behavior implementation class ZBP_SAC_I_BILL_HEADER.
+"We will implement its save_modified method in Step 9.
 
-Step 3: Define the Custom Entity for Log Display
-Log entries don't live in a transparent table. They come from the BALI framework tables at runtime, so we can't use a standard CDS view entity. We use a custom entity instead, which delegates data retrieval to a query provider class.
+"Step 3: Define the Custom Entity for Log Display
+"Log entries don't live in a transparent table. They come from the BALI framework tables at runtime, so we can't use a standard CDS view entity. 
+"We use a custom entity instead, which delegates data retrieval to a query provider class.
 
-If custom entities are new to you, I covered them in detail in my RAP series: SAP RAP Custom Entity. The key takeaway from that blog: create the query class first, because the custom entity CDS validates its existence on activation.
+"If custom entities are new to you, I covered them in detail in my RAP series: SAP RAP Custom Entity. 
+"The key takeaway from that blog: create the query class first, because the custom entity CDS validates its existence on activation.
 
 @EndUserText.label: 'Billing Item Application Log'
 @ObjectModel.query.implementedBy: 'ABAP:ZCL_BILL_ITEM_LOG_QUERY'
@@ -83,12 +90,13 @@ define custom entity ZSAC_C_BILL_ITEM_LOG {
   ChangedBy       : syuname;
 
 }
-All SELECT requests on this custom entity are routed to the class ZCL_BILL_ITEM_LOG_QUERY. The composite key BillId + ItemNo + ItemNumber ensures each row is uniquely identifiable, where ItemNumber is a runtime sequence counter.
+"All SELECT requests on this custom entity are routed to the class ZCL_BILL_ITEM_LOG_QUERY. 
+"The composite key BillId + ItemNo + ItemNumber ensures each row is uniquely identifiable, where ItemNumber is a runtime sequence counter.
 
-We define this entity before the transactional view because Step 4 will reference it in an association, and the target object must exist at activation time.
+"We define this entity before the transactional view because Step 4 will reference it in an association, and the target object must exist at activation time.
 
-Step 4: Add the Association to the Item Transactional View
-With the custom entity in place, we can add the _AppLog association to the item transactional CDS view.
+"Step 4: Add the Association to the Item Transactional View
+"With the custom entity in place, we can add the _AppLog association to the item transactional CDS view.
 
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
@@ -128,12 +136,15 @@ define view entity ZSAC_I_BILL_ITEM
       _Header,
       _AppLog
 }
-The [0..*] cardinality means one item can have many log entries. Both BillId and ItemNo are used in the join condition so the association is correctly scoped per item. The association must be projected in the field list for the OData layer to resolve it.
+"The [0..*] cardinality means one item can have many log entries. 
+"Both BillId and ItemNo are used in the join condition so the association is correctly scoped per item. 
+"The association must be projected in the field list for the OData layer to resolve it.
 
-This brings to a question - Why did we use association instead of composition to display list items of logs? Think about it.
+"This brings to a question - Why did we use association instead of composition to display list items of logs? Think about it.
 
-Step 5: Expose _AppLog in the Consumption View
-The transactional view holds the association, but the consumption view is what the OData service actually projects. If _AppLog is not carried forward here, the service will have no knowledge of it and the facet in the metadata extension will not resolve.
+"Step 5: Expose _AppLog in the Consumption View
+"The transactional view holds the association, but the consumption view is what the OData service actually projects. 
+"If _AppLog is not carried forward here, the service will have no knowledge of it and the facet in the metadata extension will not resolve.
 
 @AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'Consumption view for bill doc item'
@@ -159,10 +170,11 @@ define view entity zsac_c_bill_item
       _Header : redirected to parent zsac_c_bill_header,
       _AppLog
 }
-No redirection is needed for _AppLog unlike _Header. Redirections apply only to associations that point to other RAP BO nodes within the same composition tree. ZSAC_C_BILL_ITEM_LOG is a standalone custom entity, so it passes through as-is.
+"No redirection is needed for _AppLog unlike _Header. Redirections apply only to associations that point to other RAP BO nodes within the same composition tree.
+"ZSAC_C_BILL_ITEM_LOG is a standalone custom entity, so it passes through as-is.
 
-Step 6: Add the Change Log Facet via Metadata Extension
-We add a second facet to the item object page that renders the log entries as a table.
+"Step 6: Add the Change Log Facet via Metadata Extension
+"We add a second facet to the item object page that renders the log entries as a table.
 
 @Metadata.layer: #CORE
 @UI: {
@@ -243,8 +255,9 @@ annotate entity ZSAC_C_Bill_Item with
 }
 #LINEITEM_REFERENCE with targetElement: '_AppLog' tells Fiori Elements to render the association as an embedded table section. 
 
-Step 7: Implement the Query Provider Class
-This class is called by the framework every time the Change Log tab loads. It reads entries from the BALI tables using the XCO_CP_BAL API, which is the Cloud-ready replacement for the classic BAL_DB_SEARCH and BAL_LOG_MSG_READ function modules.
+"Step 7: Implement the Query Provider Class
+"This class is called by the framework every time the Change Log tab loads. 
+"It reads entries from the BALI tables using the XCO_CP_BAL API, which is the Cloud-ready replacement for the classic BAL_DB_SEARCH and BAL_LOG_MSG_READ function modules.
 
 CLASS zcl_bill_item_log_query DEFINITION
   PUBLIC FINAL
@@ -365,10 +378,10 @@ CLASS zcl_bill_item_log_query IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
-The filter names BILLID and ITEMNO must be in uppercase and match the CDS field names exactly. These are passed automatically by the OData layer based on the association join condition, so you don't need to send them manually from the UI.
+"The filter names BILLID and ITEMNO must be in uppercase and match the CDS field names exactly. These are passed automatically by the OData layer based on the association join condition, so you don't need to send them manually from the UI.
 
-Step 8: Implement the Log Writer Utility Class
-All BALI write logic lives in a dedicated static utility class. This keeps the behavior saver lean and makes the writer reusable across other parts of the app.
+"Step 8: Implement the Log Writer Utility Class
+"All BALI write logic lives in a dedicated static utility class. This keeps the behavior saver lean and makes the writer reusable across other parts of the app.
 
 CLASS zcl_bill_item_log_writer DEFINITION
   PUBLIC FINAL
@@ -422,12 +435,12 @@ CLASS zcl_bill_item_log_writer IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
-Each call to write_log creates and saves one log entry. The external ID format - must be identical to what the query provider builds in Step 7, otherwise reads will return nothing.
+"Each call to write_log creates and saves one log entry. The external ID format - must be identical to what the query provider builds in Step 7, otherwise reads will return nothing.
 
-Step 9: Implement the Behavior Saver
-save_modified fires after all validations pass and the managed framework has completed its own database persistence. This is the right place to write audit entries, because at this point we know the save will succeed.
+"Step 9: Implement the Behavior Saver
+"save_modified fires after all validations pass and the managed framework has completed its own database persistence. This is the right place to write audit entries, because at this point we know the save will succeed.
 
-Open the behavior implementation class ZBP_SAC_I_BILL_HEADER in ADT and navigate to the Local Types tab. You will find LSC_ZSAC_I_BILL_HEADER already generated there from Step 2. Implement its save_modified method as follows:
+"Open the behavior implementation class ZBP_SAC_I_BILL_HEADER in ADT and navigate to the Local Types tab. You will find LSC_ZSAC_I_BILL_HEADER already generated there from Step 2. Implement its save_modified method as follows:
 
 CLASS lsc_zsac_i_bill_header DEFINITION
   INHERITING FROM cl_abap_behavior_saver.
@@ -524,10 +537,10 @@ CLASS lsc_zsac_i_bill_header IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
-The %control check combined with the old/new value comparison ensures only genuinely changed fields are logged. Without the %control check, you risk logging fields the user never touched if they happen to carry the same value in the update structure.
+T"he %control check combined with the old/new value comparison ensures only genuinely changed fields are logged. Without the %control check, you risk logging fields the user never touched if they happen to carry the same value in the update structure.
 
-Step 10: Expose ZSAC_C_BILL_ITEM_LOG in the Service Definition
-The service definition controls what is visible via OData. Even though _AppLog is now part of the consumption view, the custom entity itself must be explicitly exposed here. Without this line, the OData layer cannot resolve the association at runtime and the Change Log tab will return an error.
+"Step 10: Expose ZSAC_C_BILL_ITEM_LOG in the Service Definition
+"The service definition controls what is visible via OData. Even though _AppLog is now part of the consumption view, the custom entity itself must be explicitly exposed here. Without this line, the OData layer cannot resolve the association at runtime and the Change Log tab will return an error.
 
 @EndUserText.label: 'Service Def for Billing Document'
 define service Zsac_ui_bill_head {
@@ -535,21 +548,21 @@ define service Zsac_ui_bill_head {
   expose zsac_c_bill_itemtp   as BillingDocumentItem;
   expose ZSAC_C_BILL_ITEM_LOG as BillingDocumentItemLog;
 }
-This is a commonly missed step. The association in the consumption view tells the OData layer how to navigate to the log entity, but the service definition is what tells it that the entity exists in this service. Both are needed.
+"This is a commonly missed step. The association in the consumption view tells the OData layer how to navigate to the log entity, but the service definition is what tells it that the entity exists in this service. Both are needed.
 
-The Result in Fiori Elements
-Once all pieces are activated, open any billing item in your app. The object page will have two tabs:
+"The Result in Fiori Elements
+"Once all pieces are activated, open any billing item in your app. The object page will have two tabs:
 
-Item: the standard identification facet
-Change Log: a table showing every log entry for that specific item, with message text, severity, timestamp, and user
-Object page
+"Item: the standard identification facet
+"Change Log: a table showing every log entry for that specific item, with message text, severity, timestamp, and user
+"Object page
 
-Application Log records
+"Application Log records
 
-You can also cross-check in SLG1 using object ZBILL_ITEM, subobject ZCHANGES, and external ID -.
+"You can also cross-check in SLG1 using object ZBILL_ITEM, subobject ZCHANGES, and external ID -.
 
-Application log for create record
+"Application log for create record
 
-Same entries, classic GUI view, useful for support and basis teams.
+"Same entries, classic GUI view, useful for support and basis teams.
 
-Application Log - BAL in GUI
+"Application Log - BAL in GUI
