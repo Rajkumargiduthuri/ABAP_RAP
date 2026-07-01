@@ -1,2 +1,2 @@
 # abap_rap
-repo for rap app
+This is Abap Repository where you can see my R&D 
