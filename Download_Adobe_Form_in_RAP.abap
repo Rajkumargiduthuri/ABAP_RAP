@@ -351,4 +351,7 @@ sap.ui.define([
     };
 });
 
+" for custom action button adding in fiori app please refer src folder customaction image
+
+
 
